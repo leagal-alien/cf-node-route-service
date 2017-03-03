@@ -1,0 +1,7 @@
+---
+applications:
+- name: cf-node-route-service
+  memory: 128M
+  instances: 1
+  disk_quota: 128M
+  buildpack: https://github.com/cloudfoundry/nodejs-buildpack
