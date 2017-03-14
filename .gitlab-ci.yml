@@ -1,0 +1,25 @@
+build:
+  stage: build
+  script:
+    - name=${CI_PROJECT_DIR##*builds/}
+    - echo $name
+    - appName=${name##*/}
+    - userName=${name%/*}
+    - userName=$(echo $userName | tr '[:upper:]' '[:lower:]')
+    - userName=${userName//.}
+    - echo $userName
+    - if [ $userName == "evf" ]; then export APP_IMAGE_NAME=$appName; else export APP_IMAGE_NAME=$userName"-"$appName; fi
+    - imageExists=$(docker pull $REGISTRY/$APP_IMAGE_NAME > output.txt 2>&1 ) && temp=$?
+    - test=$(cat output.txt | grep sha256 | wc -l 2>&1) && temp=$?
+    - if [ $test == 1 ]; then docker tag $REGISTRY/$APP_IMAGE_NAME $REGISTRY/$APP_IMAGE_NAME:old; docker push $REGISTRY/$APP_IMAGE_NAME:old; docker rmi $REGISTRY/$APP_IMAGE_NAME:old; fi
+    - npm set registry $NPM_REGISTRY
+    - npm rm -g evf-paas-cli
+    - npm install -g evf-paas-cli
+    - evf-paas login -u admin -p Anything_f9 evfapp.dev -d && source $HOME/evf-paas/evfapp.dev/install_env.sh
+    - export PUSH_APP=true
+    - export BUILD_ARGS_NEEDED=true
+    - export BUILD_ARGS_ARRAY=[\"http_proxy=$http_proxy\",\"https_proxy=$https_proxy\"];
+    - evf-paas build --no-cache
+    - echo "your image is build as $REGISTRY/$APP_IMAGE_NAME"
+  tags:
+    - EVF-PAAS
