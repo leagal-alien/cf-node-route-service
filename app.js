@@ -2,11 +2,12 @@ var os = require('os');
 var HashRing = require('hashring');
 var request = require('request');
 var http = require('http');
-var accessToken, tokenType, appId, hashRingIndexes, appName;
-var apiUrl = 'https://api.run.pivotal.io';
-var _userName = 'pradeepkumartippa@gmail.com';
-var _password = '$Pivotal999';
-getAuthenticationToken(false, function(err){
+var accessToken, tokenType, appId, hashRingIndexes, appName, doPolling = true;
+var _domain = process.env.domain;
+var _userName = process.env.username;
+var _password = process.env.password;
+var apiUrl = 'https://api.'+_domain;
+getAuthenticationToken(true, function(err){
     if(err){
         console.error(err);
     }
@@ -73,24 +74,33 @@ function getAppId(doProceed, cb){
         } else {
             body = JSON.parse(res);
             console.log("All apps response ", JSON.stringify(body));
-            for(var i=0;i<body.resources.length;i++){
-                if(body.resources[i].entity.name === appName){
-                    console.log("Got the application name.")
-                    appId = body.resources[i].metadata.guid;
-                    break;
+            if(body.code && body.code === 1000){
+                getAuthenticationToken(true, function(err){
+                    if(err){
+                        console.error(err);
+                    }
+                });
+            } else if (body.resources){
+                for(var i=0;i<body.resources.length;i++){
+                    if(body.resources[i].entity.name === appName){
+                        console.log("Got the application name.")
+                        appId = body.resources[i].metadata.guid;
+                        break;
+                    }
                 }
-            }
-            if(appId) {
-                if(doProceed){
-                    getIndexes(cb);
+                if(appId) {
+                    if(doProceed){
+                        getIndexes(cb);
+                    } else {
+                        cb();
+                    }
                 } else {
-                    cb();
+                    cb("Unable to get Application GUID.");
                 }
             } else {
-                cb("Unable to get Application GUID.");
+                cb("Response format is not proper.");
             }
         }
-        
     });
 }
 
@@ -109,26 +119,38 @@ function getIndexes(cb){
             cb(err);
         } else {
             body = JSON.parse(res);
-            var indexes = [];
-            Object.keys(body).forEach(function(key){
-                if(body[key].state === 'RUNNING'){
-                    indexes.push(key);
-                }
-            });            
-            if(indexes.length > 0){
-                hashRingIndexes = [];
-                indexes.forEach(function(index){
-                    hashRingIndexes.push(appId+':'+index);
+            if(body.code && body.code === 1000){
+                getAuthenticationToken(true, function(err){
+                    if(err){
+                        console.error(err);
+                    }
                 });
-                cb();
             } else {
-                cb("No running instances of application.")
-            }
+                var indexes = [];
+                Object.keys(body).forEach(function(key){
+                    if(body[key].state === 'RUNNING'){
+                        indexes.push(key);
+                    }
+                });            
+                if(indexes.length > 0){
+                    hashRingIndexes = [];
+                    indexes.forEach(function(index){
+                        hashRingIndexes.push(appId+':'+index);
+                    });
+                    if(doPolling){
+                        doPolling = false;
+                        startPolling();
+                    }
+                    cb();
+                } else {
+                    cb("No running instances of application.")
+                }
+            }            
         }
     });
 }
 function getAuthenticationToken(doProceed, cb){
-    var path = 'https://login.run.pivotal.io/oauth/token'
+    var path = 'https://login'+_domain+'/oauth/token'
 
     var method = 'POST';
     var body = {
@@ -159,20 +181,26 @@ function getAuthenticationToken(doProceed, cb){
                 if (res.access_token) {
                     accessToken = res.access_token;
                     tokenType = res.token_type;
-                    console.log("Access token ", accessToken);
                     if(doProceed){
                         getAppId(doProceed, cb);
                     } else {
                         cb();
-                    }
-                    
+                    }                    
                 } else{
-                    console.log("Unable to get access token, response body ", res);
+                    cb("Unable to get access token, response body " + JSON.stringify(res));
                 }   
             }
         } catch(err2) {
             cb(err2);
         }         
     });
+}
+
+function startPolling(){
+    setInterval(function(){
+        getIndexes(function(err){
+            console.error(err);
+        });
+    }, 60000);
 }
 server.listen(process.env.PORT || 3000);
