@@ -36,7 +36,7 @@ var server = http.createServer(function(req, res) {
                 getIndexes(function(err){
                     if(err){
                         console.error("Error: ", err);
-                    } else {
+                    } else if(apiMatch){
                         var ring = new HashRing(hashRingIndexes, 'md5', { 'max cache size': 10000 });
                         setHeaders(req, apiMatch);
                         req.headers['X-Cf-App-Instance'] = ring.get(apiMatch[1].toLowerCase()+ '/' + apiMatch[2]);
@@ -48,7 +48,7 @@ var server = http.createServer(function(req, res) {
             getAppId(true, function(err){
                 if (err) {
                     console.error("Error: ", err);
-                } else {
+                } else if(apiMatch){
                     var ring = new HashRing(hashRingIndexes, 'md5', { 'max cache size': 10000 });
                     setHeaders(req, apiMatch);
                     req.headers['X-Cf-App-Instance'] = ring.get(apiMatch[1].toLowerCase()+ '/' + apiMatch[2]);
@@ -89,7 +89,7 @@ function getAppId(doProceed, cb){
         } else {
             body = JSON.parse(res);
             console.log("All apps response ", JSON.stringify(body));
-            if(body.code && body.code === 1000){
+            if(body.code && (body.code === 1000 || body.code === 10002)){
                 getAuthenticationToken(true, function(err){
                     if(err){
                         console.error(err);
@@ -134,7 +134,7 @@ function getIndexes(cb){
             cb(err);
         } else {
             body = JSON.parse(res);
-            if(body.code && body.code === 1000){
+            if(body.code && (body.code === 1000 || body.code === 10002)){
                 getAuthenticationToken(true, function(err){
                     if(err){
                         console.error(err);
@@ -165,7 +165,7 @@ function getIndexes(cb){
     });
 }
 function getAuthenticationToken(doProceed, cb){
-    var path = 'https://login'+_domain+'/oauth/token'
+    var path = 'https://login.'+_domain+'/oauth/token'
 
     var method = 'POST';
     var body = {
