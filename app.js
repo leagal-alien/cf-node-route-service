@@ -2,6 +2,7 @@ var os = require('os');
 var HashRing = require('hashring');
 var request = require('request');
 var http = require('http');
+var URL = require('url');
 var accessToken, tokenType, appId, hashRingIndexes, appName, doPolling = true;
 var _domain = process.env.domain;
 var _userName = process.env.username;
@@ -20,10 +21,16 @@ var server = http.createServer(function(req, res) {
     if (url) {
         tempUrl = url.replace(/(^\w+:|^)\/\//, '');
         appName = tempUrl.substring(0, tempUrl.indexOf('.'));
+        pathName = URL.parse(url).pathname;
+        var regex = /^\/api\/(.*)\/(.*)/;
+        var apiMatch = pathName.match(regex);
         if(appId){
             if(hashRingIndexes && hashRingIndexes.length > 0){
-                var ring = new HashRing(hashRingIndexes, 'md5', { 'max cache size': 10000 });
-                req.headers['X-Cf-App-Instance'] = ring.get(url);
+                if(apiMatch){
+                    var ring = new HashRing(hashRingIndexes, 'md5', { 'max cache size': 10000 });
+                    setHeaders(req, apiMatch);
+                    req.headers['X-Cf-App-Instance'] = ring.get(apiMatch[1].toLowerCase()+ '/' + apiMatch[2]);
+                }
                 req.pipe(request(url)).pipe(res);
             } else {
                 getIndexes(function(err){
@@ -31,7 +38,8 @@ var server = http.createServer(function(req, res) {
                         console.error("Error: ", err);
                     } else {
                         var ring = new HashRing(hashRingIndexes, 'md5', { 'max cache size': 10000 });
-                        req.headers['X-Cf-App-Instance'] = ring.get(url);
+                        setHeaders(req, apiMatch);
+                        req.headers['X-Cf-App-Instance'] = ring.get(apiMatch[1].toLowerCase()+ '/' + apiMatch[2]);
                     }
                     req.pipe(request(url)).pipe(res);
                 });
@@ -42,7 +50,8 @@ var server = http.createServer(function(req, res) {
                     console.error("Error: ", err);
                 } else {
                     var ring = new HashRing(hashRingIndexes, 'md5', { 'max cache size': 10000 });
-                    req.headers['X-Cf-App-Instance'] = ring.get(url);
+                    setHeaders(req, apiMatch);
+                    req.headers['X-Cf-App-Instance'] = ring.get(apiMatch[1].toLowerCase()+ '/' + apiMatch[2]);
                 }
                 req.pipe(request(url)).pipe(res);
             });
@@ -51,6 +60,12 @@ var server = http.createServer(function(req, res) {
         res.end("ERROR: Unable to get the URL to redirect to.");
     }
 });
+
+function setHeaders(req, apiMatch){
+    req.headers['x-evproxy-model-plural'] = apiMatch[1].toLowerCase();
+    req.headers['x-evproxy-model-id'] = apiMatch[2];
+    req.headers['x-evproxy-hash-key'] = apiMatch[1].toLowerCase()+ '/' + apiMatch[2];
+}
 
 function getData(reqObject, cb) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
